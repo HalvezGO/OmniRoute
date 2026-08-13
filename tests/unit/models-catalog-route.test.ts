@@ -741,7 +741,9 @@ test("v1 models catalog uses provider-node prefixes for compatible provider cust
 
   assert.equal(response.status, 200);
   assert.ok(ids.has("cm/claude-edge"));
-  assert.equal(ids.has("anthropic-compatible-demo/claude-edge"), false);
+  // #9526: dual (default) prefix mode lists BOTH the configured prefix AND the
+  // full provider-node id for a compatible-provider custom model.
+  assert.ok(ids.has("anthropic-compatible-demo/claude-edge"));
 });
 
 test("v1 models catalog includes synced Gemini models and duplicates audio models for speech", async () => {

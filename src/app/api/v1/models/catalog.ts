@@ -893,7 +893,7 @@ async function buildUnifiedModelsResponseCore(
             });
           }
 
-          if (includeCanonical && canonicalProviderId !== alias && !prefix) {
+          if (includeCanonical && canonicalProviderId !== alias) {
             const providerPrefixedId = `${canonicalProviderId}/${displayModelId}`;
             if (!models.some((model) => model.id === providerPrefixedId)) {
               models.push({
@@ -1242,7 +1242,7 @@ async function buildUnifiedModelsResponseCore(
             });
           }
 
-          if (includeCanonical && canonicalProviderId !== alias && !prefix && !isNoAuthProvider) {
+          if (includeCanonical && canonicalProviderId !== alias && !isNoAuthProvider) {
             const providerPrefixedId = `${canonicalProviderId}/${modelId}`;
             if (models.some((m) => m.id === providerPrefixedId)) continue;
             const providerVisionFields =
@@ -1295,7 +1295,13 @@ async function buildUnifiedModelsResponseCore(
           continue;
         }
 
-        const alias = providerIdToAlias[canonicalProviderId] || providerKey;
+        const prefix = providerIdToPrefix[providerKey] || providerIdToPrefix[canonicalProviderId];
+        // #9526: for compatible providers the managed-alias storage prefix is the raw
+        // provider-node id (a UUID). Resolve the display alias through the configured
+        // node prefix FIRST (mirroring the synced/custom loops) so `aliasId` never
+        // leaks `openai-compatible-chat-<uuid>/model` — that raw id is not in any
+        // static alias map, so without this the alias falls back to the UUID.
+        const alias = prefix || providerIdToAlias[canonicalProviderId] || providerKey;
         if (
           !activeAliases.has(alias) &&
           !activeAliases.has(canonicalProviderId) &&

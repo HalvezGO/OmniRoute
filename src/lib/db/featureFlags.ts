@@ -8,6 +8,7 @@
 
 import { FEATURE_FLAG_DEFINITIONS } from "@/shared/constants/featureFlagDefinitions";
 import { getDbInstance } from "./core";
+import { invalidateDbCache } from "./readCache";
 
 const NAMESPACE = "feature_flags";
 
@@ -62,6 +63,11 @@ export function setFeatureFlagOverride(key: string, value: string): void {
     key,
     value
   );
+  // #9526: flags like MODELS_CATALOG_PREFIX_MODE feed the unified /v1/models
+  // catalog builder (and its response cache key folds in the catalog-cache
+  // version). Invalidate settings so a freshly changed flag is reflected
+  // immediately instead of waiting out the catalog TTL.
+  invalidateDbCache("settings");
 }
 
 /**
@@ -71,6 +77,7 @@ export function setFeatureFlagOverride(key: string, value: string): void {
 export function removeFeatureFlagOverride(key: string): void {
   const db = getDbInstance();
   db.prepare("DELETE FROM key_value WHERE namespace = ? AND key = ?").run(NAMESPACE, key);
+  invalidateDbCache("settings");
 }
 
 /**
@@ -79,4 +86,5 @@ export function removeFeatureFlagOverride(key: string): void {
 export function clearAllFeatureFlagOverrides(): void {
   const db = getDbInstance();
   db.prepare("DELETE FROM key_value WHERE namespace = ?").run(NAMESPACE);
+  invalidateDbCache("settings");
 }
