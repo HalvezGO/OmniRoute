@@ -39,7 +39,7 @@ jobs:
       promote_latest: ${{ steps.version.outputs.promote_latest }}
       skip: ${{ steps.version.outputs.skip }}
     env:
-      IMAGE_NAME: diegosouzapw/omniroute
+      IMAGE_NAME: caterpillarnextdoor/omniroute
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -113,14 +113,14 @@ jobs:
           #    `main` is always rebuilt (mutable floating tag).
           SKIP="false"
           if [ "$VERSION" != "main" ]; then
-            if docker manifest inspect "diegosouzapw/omniroute:${VERSION}" >/dev/null 2>&1; then
-              echo "Image diegosouzapw/omniroute:${VERSION} already exists on Docker Hub — skipping rebuild."
+            if docker manifest inspect "caterpillarnextdoor/omniroute:${VERSION}" >/dev/null 2>&1; then
+              echo "Image caterpillarnextdoor/omniroute:${VERSION} already exists on Docker Hub — skipping rebuild."
               SKIP="true"
             fi
           fi
           echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
 
-          echo "Publishing diegosouzapw/omniroute:$VERSION (promote_latest=$PROMOTE, skip=$SKIP)"
+          echo "Publishing caterpillarnextdoor/omniroute:$VERSION (promote_latest=$PROMOTE, skip=$SKIP)"
 
   build:
     name: Build Docker (${{ matrix.platform }})
@@ -141,8 +141,7 @@ jobs:
             runner: ubuntu-24.04-arm
             arch: arm64
     env:
-      IMAGE_NAME: diegosouzapw/omniroute
-      GHCR_IMAGE_NAME: ghcr.io/diegosouzapw/omniroute
+      IMAGE_NAME: caterpillarnextdoor/omniroute
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -160,13 +159,6 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Build and push platform image by digest
         id: build
         uses: docker/build-push-action@v7
@@ -177,7 +169,6 @@ jobs:
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           tags: |
             ${{ env.IMAGE_NAME }}
-            ${{ env.GHCR_IMAGE_NAME }}
           cache-from: type=gha,scope=docker-${{ matrix.arch }}
           cache-to: type=gha,scope=docker-${{ matrix.arch }},mode=max
           no-cache: false
@@ -194,7 +185,6 @@ jobs:
           outputs: type=image,push-by-digest=true,name-canonical=true,push=true
           tags: |
             ${{ env.IMAGE_NAME }}
-            ${{ env.GHCR_IMAGE_NAME }}
           cache-from: type=gha,scope=docker-web-${{ matrix.arch }}
           cache-to: type=gha,scope=docker-web-${{ matrix.arch }},mode=max
           no-cache: false
@@ -239,8 +229,7 @@ jobs:
       packages: write
       security-events: write
     env:
-      IMAGE_NAME: diegosouzapw/omniroute
-      GHCR_IMAGE_NAME: ghcr.io/diegosouzapw/omniroute
+      IMAGE_NAME: caterpillarnextdoor/omniroute
       VERSION: ${{ needs.prepare.outputs.version }}
       PROMOTE_LATEST: ${{ needs.prepare.outputs.promote_latest }}
     steps:
@@ -259,13 +248,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v4
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download base digests
         uses: actions/download-artifact@v8
@@ -305,30 +287,6 @@ jobs:
           create_manifest "${IMAGE_NAME}" "" /tmp/digests/base
           create_manifest "${IMAGE_NAME}" "-web" /tmp/digests/web
 
-      - name: Create GHCR manifest
-        run: |
-          set -euo pipefail
-
-          create_manifest() {
-            local image="$1" suffix="$2" dir="$3"
-            local tags=(-t "${image}:${VERSION}${suffix}")
-            if [ "$PROMOTE_LATEST" = "true" ]; then
-              tags+=(-t "${image}:latest${suffix}")
-            fi
-            local refs=()
-            while IFS= read -r digest_file; do
-              refs+=("${image}@sha256:$(basename "$digest_file")")
-            done < <(find "$dir" -type f | sort)
-            if [ "${#refs[@]}" -eq 0 ]; then
-              echo "No image digests in $dir" >&2
-              exit 1
-            fi
-            docker buildx imagetools create "${tags[@]}" "${refs[@]}"
-          }
-
-          create_manifest "${GHCR_IMAGE_NAME}" "" /tmp/digests/base
-          create_manifest "${GHCR_IMAGE_NAME}" "-web" /tmp/digests/web
-
       - name: Inspect image
         if: needs.prepare.outputs.version != 'main'
         run: |
@@ -339,7 +297,7 @@ jobs:
         continue-on-error: true
         uses: anchore/sbom-action@v0
         with:
-          image: ${{ env.GHCR_IMAGE_NAME }}:${{ env.VERSION }}
+          image: ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           format: cyclonedx-json
           output-file: sbom-image.cdx.json
           artifact-name: sbom-image.cdx.json
@@ -360,7 +318,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.GHCR_IMAGE_NAME }}:${{ env.VERSION }}
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
@@ -381,7 +339,7 @@ jobs:
         if: needs.prepare.outputs.version != 'main'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          image-ref: ${{ env.GHCR_IMAGE_NAME }}:${{ env.VERSION }}
+          image-ref: ${{ env.IMAGE_NAME }}:${{ env.VERSION }}
           format: table
           severity: CRITICAL
           ignore-unfixed: true
@@ -403,6 +361,6 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-          repository: diegosouzapw/omniroute
+          repository: caterpillarnextdoor/omniroute
           short-description: "OmniRoute — Unified AI proxy. Route any LLM through one endpoint."
           readme-filepath: ./README.md
