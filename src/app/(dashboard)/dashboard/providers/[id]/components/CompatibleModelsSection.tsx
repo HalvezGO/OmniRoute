@@ -23,7 +23,10 @@ import {
 } from "../providerPageHelpers";
 import { ModelVisibilityToolbar } from "./ModelRow";
 import { sortModelsFreeFirst, isFreeModel } from "@/shared/utils/freeModels";
-import PassthroughModelRow, { type PassthroughModelRowProps } from "./PassthroughModelRow";
+import PassthroughModelRow, {
+  type ImportedModelEditPatch,
+  type PassthroughModelRowProps,
+} from "./PassthroughModelRow";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -74,6 +77,11 @@ export interface CompatibleModelsSectionProps {
   testProgress?: { done: number; total: number } | null;
   autoHideFailed?: boolean;
   onAutoHideFailedChange?: (v: boolean) => void;
+  /** Imported-model editing (persists into model_synced_overrides via PUT /api/provider-models). */
+  onSaveImportedModel?: (
+    patch: { provider: string; modelId: string } & ImportedModelEditPatch
+  ) => Promise<void>;
+  isSavingImportedModel?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -118,6 +126,8 @@ export default function CompatibleModelsSection({
   testProgress,
   autoHideFailed,
   onAutoHideFailedChange,
+  onSaveImportedModel,
+  isSavingImportedModel,
 }: CompatibleModelsSectionProps) {
   const [newModel, setNewModel] = useState("");
   const [adding, setAdding] = useState(false);
@@ -147,6 +157,7 @@ export default function CompatibleModelsSection({
       source: string;
       isFree: boolean;
       isHidden: boolean;
+      model?: CompatModelRow;
     }> = [];
     const seenModelIds = new Set<string>();
 
@@ -170,6 +181,7 @@ export default function CompatibleModelsSection({
           /\bgr[aá]tis\b|\bfree\b/i.test(model.name || "") ||
           isFreeModel(providerStorageAlias, { id: model.id }),
         isHidden: isModelHidden(model.id),
+        model,
       });
       seenModelIds.add(model.id);
     };
@@ -207,6 +219,7 @@ export default function CompatibleModelsSection({
           /\bgr[aá]tis\b|\bfree\b/i.test(customModel?.name || alias || "") ||
           isFreeModel(providerStorageAlias, { id: modelId }),
         isHidden: isModelHidden(modelId),
+        model: customModel,
       });
       seenModelIds.add(modelId);
     }
@@ -429,17 +442,19 @@ export default function CompatibleModelsSection({
             onAutoHideFailedChange={onAutoHideFailedChange}
           />
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {displayModels.map(({ modelId, alias, isHidden, source, isFree }) => {
+            {displayModels.map(({ modelId, alias, isHidden, source, isFree, model }) => {
               const fullModel = `${providerDisplayAlias}/${modelId}`;
               return (
                 <PassthroughModelRow
                   key={`${providerStorageAlias}:${modelId}`}
                   modelId={modelId}
                   fullModel={fullModel}
+                  provider={providerStorageAlias}
                   alias={alias}
                   source={source}
                   isFree={isFree}
                   isHidden={isHidden}
+                  model={model}
                   copied={copied}
                   onCopy={onCopy}
                   onDeleteAlias={
@@ -462,6 +477,17 @@ export default function CompatibleModelsSection({
                   onTestModel={onTestModel}
                   testStatus={modelTestStatus?.[modelId] || null}
                   testingModel={testingModelId === modelId}
+                  onSaveModelEdit={
+                    onSaveImportedModel
+                      ? (patch) =>
+                          onSaveImportedModel({
+                            provider: providerStorageAlias,
+                            modelId,
+                            ...patch,
+                          })
+                      : undefined
+                  }
+                  isSavingEdit={isSavingImportedModel === modelId}
                 />
               );
             })}

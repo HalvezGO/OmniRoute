@@ -183,6 +183,45 @@ export default function ProviderDetailPageClient() {
   const emailsVisible = useEmailPrivacyStore((s) => s.emailsVisible);
   const notify = useNotificationStore();
 
+  // ── Imported-model editing (model_synced_overrides) ───────────────────────
+  const [savingImportedModelId, setSavingImportedModelId] = useState<string | null>(null);
+  const handleSaveImportedModel = useCallback(
+    async (
+      patch: { provider: string; modelId: string } & {
+        apiFormat?: string;
+        targetFormat?: string;
+        supportedEndpoints?: string[];
+        supportsVision?: boolean | null;
+        contextWindowOverride?: number | null;
+      }
+    ) => {
+      const { provider, modelId, ...props } = patch;
+      setSavingImportedModelId(modelId);
+      try {
+        // PUT /api/provider-models: for synced/imported models the route persists
+        // the edits into model_synced_overrides (no customModels row is created,
+        // so the imported copy is never shadowed by a same-id custom entry).
+        const res = await fetch("/api/provider-models", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, modelId, ...props }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          notify.error(data?.error?.message || "Failed to save model properties");
+          return;
+        }
+        await fetchProviderModelMeta();
+      } catch (e) {
+        console.error("Failed to save imported model:", e);
+        notify.error("Failed to save model properties");
+      } finally {
+        setSavingImportedModelId(null);
+      }
+    },
+    [fetchProviderModelMeta, notify]
+  );
+
   // Phase 1i: external link flow — placed after notify/fetchConnections are defined
   const {
     externalLinkModalOpen,
@@ -691,6 +730,10 @@ export default function ProviderDetailPageClient() {
             effectiveModelPreserveDeveloper={effectiveModelPreserveDeveloper}
             effectiveModelHidden={effectiveModelHidden}
             getUpstreamHeadersRecordForModel={getUpstreamHeadersRecordForModel}
+            onSaveImportedModel={
+              compatibleSupportsModelImport ? handleSaveImportedModel : undefined
+            }
+            isSavingImportedModel={savingImportedModelId}
             t={t}
           />
 

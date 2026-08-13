@@ -14,6 +14,7 @@ import { getSyncedCapability } from "@/lib/modelsDevSync";
 import { MODELS_DEV_PROVIDER_MAP } from "@/lib/modelsDevSync/transform";
 import { getModelContextOverride } from "@/lib/db/modelContextOverrides";
 import { getModelCapabilityOverride } from "@/lib/db/modelCapabilityOverrides";
+import { getModelSyncedOverrideRow } from "@/lib/db/modelSyncedOverrides";
 import { isVisionModelId } from "@/shared/constants/visionModels";
 import { getUnsupportedParams } from "@omniroute/open-sse/config/providerRegistry.ts";
 import {
@@ -582,7 +583,7 @@ export function getResolvedModelCapabilities(input: CapabilityInput): ResolvedMo
   // fields keep using the non-leaf `spec` from getStaticSpec() above.
   const visionSpec = getVisionStaticSpec(resolved.model, resolved.rawModel);
 
-  const supportsVision = resolveVisionCapability(
+  let supportsVision = resolveVisionCapability(
     visionSpec,
     registryModel,
     synced,
@@ -590,6 +591,18 @@ export function getResolvedModelCapabilities(input: CapabilityInput): ResolvedMo
     modalitiesOutput,
     lookupKey
   );
+
+  // Operator synced-model vision override (model_synced_overrides). For an
+  // imported/synced model the operator's verdict is authoritative and wins over
+  // every synced/registry/spec heuristic above.
+  if (resolved.provider && resolved.model) {
+    const syncedVisionOverride = getModelSyncedOverrideRow(resolved.provider, resolved.model).find(
+      (entry) => entry.key === "supportsVision"
+    );
+    if (syncedVisionOverride && typeof syncedVisionOverride.value === "boolean") {
+      supportsVision = syncedVisionOverride.value;
+    }
+  }
 
   // #8250: when resolve promoted vision over a contradictory attachment=false,
   // expose attachment=true so catalog / Vision Bridge / clients see one verdict.
@@ -694,8 +707,7 @@ export function capThinkingBudget(input: CapabilityInput, budget: number): numbe
   // default to "gemini". Without this a cap learned via the executor would be
   // invisible to bare-model callers. Provider-qualified inputs keep their own
   // provider, preserving per-provider independence.
-  const providerForLearned =
-    resolved.provider ?? (modelLower.includes("gemini") ? "gemini" : null);
+  const providerForLearned = resolved.provider ?? (modelLower.includes("gemini") ? "gemini" : null);
 
   const learned = getLearnedThinkingCap(providerForLearned, modelId);
   if (learned !== null) {

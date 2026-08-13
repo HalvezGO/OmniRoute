@@ -10,7 +10,7 @@ with **MCP Server** (104 tools), **A2A v0.3 Protocol**, and **Electron desktop a
 
 > **Live counts (v3.8.49)**: providers 290 · MCP tools 104 · MCP scopes 30 · A2A skills 6 ·
 > open-sse services 134 · routing strategies 17 · auto-combo scoring factors 12 ·
-> DB modules 95 · DB migrations 110 · base tables 17 · search providers 11 ·
+> DB modules 95 · DB migrations 131 · base tables 17 · search providers 11 ·
 > i18n locales 42. **Refresh with `npm run check:docs-all`.**
 
 ## Doc Accuracy Discipline (read before writing any doc)
@@ -189,7 +189,7 @@ All persistence uses SQLite through **95 domain-specific modules** in `src/lib/d
 - Extension modules: `evals.ts`, `webhooks.ts`, `reasoningCache.ts`, `readCache.ts`, `tierConfig.ts`, `compressionCombos.ts`, `compressionScheduler.ts`, `batches.ts`, `files.ts`, `syncTokens.ts`, `proxies.ts`, `oneproxy.ts`, `upstreamProxy.ts`, `versionManager.ts`, `cliToolState.ts`, `prompts.ts`, `detailedLogs.ts`, `contextHandoffs.ts`, `compression.ts`, `stats.ts`
 
 Live count: `ls src/lib/db/*.ts | wc -l` (currently 95). Drift detection: `npm run check:docs-counts`.
-Schema migrations live in `db/migrations/` (**110 files** as of v3.8.43) and run via `migrationRunner.ts`.
+Schema migrations live in `db/migrations/` (**131 files** as of v3.8.49) and run via `migrationRunner.ts`.
 `src/lib/localDb.ts` is a **re-export layer only** — never add logic there.
 
 #### DB Internals

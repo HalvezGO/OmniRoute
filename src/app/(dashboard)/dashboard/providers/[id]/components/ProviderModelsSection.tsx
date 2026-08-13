@@ -107,6 +107,15 @@ export interface ProviderModelsSectionProps {
   effectiveModelHidden: (modelId: string) => boolean;
   getUpstreamHeadersRecordForModel: (modelId: string, protocol: string) => Record<string, string>;
 
+  // Imported-model editing (persists into model_synced_overrides via PUT /api/provider-models)
+  onSaveImportedModel?: (
+    patch: {
+      provider: string;
+      modelId: string;
+    } & import("./PassthroughModelRow").ImportedModelEditPatch
+  ) => Promise<void>;
+  isSavingImportedModel?: string | null;
+
   // Translation
   t: ProviderMessageTranslator;
 }
@@ -168,6 +177,8 @@ export default function ProviderModelsSection({
   effectiveModelPreserveDeveloper,
   effectiveModelHidden,
   getUpstreamHeadersRecordForModel,
+  onSaveImportedModel,
+  isSavingImportedModel,
   t,
 }: ProviderModelsSectionProps) {
   const [freeFilter, setFreeFilter] = useState<"all" | "free" | "paid">("all");
@@ -266,6 +277,8 @@ export default function ProviderModelsSection({
           testProgress={testProgress}
           autoHideFailed={autoHideFailed}
           onAutoHideFailedChange={setAutoHideFailed}
+          onSaveImportedModel={onSaveImportedModel}
+          isSavingImportedModel={isSavingImportedModel}
         />
       </div>
     );
@@ -341,6 +354,8 @@ export default function ProviderModelsSection({
           connectionId={selectedConnection?.id ?? ""}
           autoHideFailed={autoHideFailed}
           onAutoHideFailedChange={setAutoHideFailed}
+          onSaveImportedModel={onSaveImportedModel}
+          isSavingImportedModel={isSavingImportedModel}
         />
       </div>
     );

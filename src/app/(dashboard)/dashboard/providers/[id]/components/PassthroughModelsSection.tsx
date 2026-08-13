@@ -33,7 +33,7 @@ import {
 } from "../providerPageHelpers";
 import { ModelVisibilityToolbar } from "./ModelRow";
 import { sortModelsFreeFirst, isFreeModel } from "@/shared/utils/freeModels";
-import PassthroughModelRow from "./PassthroughModelRow";
+import PassthroughModelRow, { type ImportedModelEditPatch } from "./PassthroughModelRow";
 
 // ---------------------------------------------------------------------------
 // Props
@@ -79,6 +79,11 @@ export interface PassthroughModelsSectionProps {
   /** Controlled from the outer component so both sections share one checkbox (#3610). */
   autoHideFailed?: boolean;
   onAutoHideFailedChange?: (v: boolean) => void;
+  /** Imported-model editing (persists into model_synced_overrides via PUT /api/provider-models). */
+  onSaveImportedModel?: (
+    patch: { provider: string; modelId: string } & ImportedModelEditPatch
+  ) => Promise<void>;
+  isSavingImportedModel?: string | null;
 }
 
 function getDefaultModelAlias(model: CompatModelRow): string | null {
@@ -124,6 +129,8 @@ export default function PassthroughModelsSection({
   // when the outer component does not pass the prop (backward-compat / standalone use).
   autoHideFailed: autoHideFailedProp,
   onAutoHideFailedChange,
+  onSaveImportedModel,
+  isSavingImportedModel,
 }: PassthroughModelsSectionProps) {
   const [newModel, setNewModel] = useState("");
   const [adding, setAdding] = useState(false);
@@ -231,6 +238,7 @@ export default function PassthroughModelsSection({
       source: string;
       isFree: boolean;
       isHidden: boolean;
+      model?: CompatModelRow;
     }> = [];
     const seenModelIds = new Set<string>();
 
@@ -259,6 +267,7 @@ export default function PassthroughModelsSection({
           /\bgr[aá]tis\b|\bfree\b/i.test(model.name || "") ||
           isFreeModel(providerId, { id: model.id }),
         isHidden: isModelHidden(model.id),
+        model,
       });
       seenModelIds.add(model.id);
     };
@@ -297,6 +306,7 @@ export default function PassthroughModelsSection({
           /\bgr[aá]tis\b|\bfree\b/i.test(customModel?.name || alias || "") ||
           isFreeModel(providerId, { id: modelId }),
         isHidden: isModelHidden(modelId),
+        model: customModel,
       });
       seenModelIds.add(modelId);
     }
@@ -422,7 +432,7 @@ export default function PassthroughModelsSection({
             onSortFreeFirstChange={setSortFreeFirst}
           />
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {displayModels.map(({ modelId, fullModel, alias, isHidden, source, isFree }) => (
+            {displayModels.map(({ modelId, fullModel, alias, isHidden, source, isFree, model }) => (
               <PassthroughModelRow
                 key={fullModel as string}
                 modelId={modelId}
@@ -432,6 +442,7 @@ export default function PassthroughModelsSection({
                 source={source}
                 isFree={isFree}
                 isHidden={isHidden}
+                model={model}
                 copied={copied}
                 onCopy={onCopy}
                 onDeleteAlias={source === "alias" && alias ? () => onDeleteAlias(alias) : undefined}
@@ -448,6 +459,12 @@ export default function PassthroughModelsSection({
                 onTestModel={onTestModel}
                 testStatus={modelTestStatus?.[modelId] || null}
                 testingModel={testingModelId === modelId}
+                onSaveModelEdit={
+                  onSaveImportedModel
+                    ? (patch) => onSaveImportedModel({ provider: providerId, modelId, ...patch })
+                    : undefined
+                }
+                isSavingEdit={isSavingImportedModel === modelId}
               />
             ))}
           </div>

@@ -7,8 +7,10 @@ import {
   deleteSyncedAvailableModelsForProvider,
   removeSyncedAvailableModel,
   updateCustomModel,
+  getSyncedAvailableModels,
   getModelCompatOverrides,
   mergeModelCompatOverride,
+  setModelSyncedOverride,
   type ModelCompatPatch,
 } from "@/lib/localDb";
 import {
@@ -233,6 +235,57 @@ export async function PUT(request) {
     const model = await updateCustomModel(provider, modelId, updates);
 
     if (!model) {
+      // Imported/synced model path: the row lives in syncedAvailableModels (from
+      // the provider's own /models discovery), not customModels. Persist operator
+      // edits into model_synced_overrides so they win over a re-sync without
+      // shadowing the imported copy with a same-id custom entry.
+      const syncedOverrideKeys = [
+        "apiFormat",
+        "supportedEndpoints",
+        "targetFormat",
+        "supportsVision",
+      ];
+      const hasSyncedOverrideKeys = syncedOverrideKeys.some((key) => key in raw);
+      if (hasSyncedOverrideKeys) {
+        const syncedModels = await getSyncedAvailableModels(provider);
+        if (syncedModels.some((entry) => entry.id === modelId)) {
+          let wroteOverride = false;
+          if ("apiFormat" in raw) {
+            setModelSyncedOverride(provider, modelId, "apiFormat", apiFormat);
+            wroteOverride = true;
+          }
+          if ("supportedEndpoints" in raw) {
+            setModelSyncedOverride(provider, modelId, "supportedEndpoints", supportedEndpoints);
+            wroteOverride = true;
+          }
+          if ("targetFormat" in raw) {
+            setModelSyncedOverride(provider, modelId, "targetFormat", targetFormat);
+            wroteOverride = true;
+          }
+          if ("supportsVision" in raw) {
+            setModelSyncedOverride(provider, modelId, "supportsVision", supportsVision);
+            wroteOverride = true;
+          }
+          if (wroteOverride) {
+            return Response.json({
+              model: {
+                id: modelId,
+                name: modelId,
+                source: "imported",
+                apiFormat,
+                supportedEndpoints,
+                targetFormat,
+                supportsVision,
+              },
+              syncedOverride: true,
+              ...(contextWindowOverrideResult !== undefined
+                ? { contextWindowOverride: contextWindowOverrideResult }
+                : {}),
+            });
+          }
+        }
+      }
+
       const rawKeys = Object.keys(raw);
       const compatOnly =
         rawKeys.length > 0 &&

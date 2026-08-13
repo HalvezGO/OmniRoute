@@ -19,7 +19,11 @@ import { enforceApiKeyPolicy } from "@/shared/utils/apiKeyPolicy";
 import { v1ImageGenerationSchema } from "@/shared/validation/schemas";
 import { isValidationFailure, validateBody } from "@/shared/validation/helpers";
 
-import { getAllCustomModels, resolveProxyForConnection } from "@/lib/localDb";
+import {
+  getAllCustomModels,
+  getAllSyncedAvailableModels,
+  resolveProxyForConnection,
+} from "@/lib/localDb";
 import { resolveImageRouteModel } from "@/lib/images/imageRouteModel";
 import { runWithProxyContext } from "@omniroute/open-sse/utils/proxyFetch.ts";
 import { attachOmniRouteMetaHeaders } from "@/domain/omnirouteResponseMeta";
@@ -135,6 +139,31 @@ async function postHandler(request, context) {
           if (!model.supportedEndpoints.includes("images")) continue;
           const fullId = `${providerId}/${model.id}`;
           if (fullId === body.model) {
+            provider = providerId;
+            isCustomModel = true;
+            break;
+          }
+        }
+        if (provider) break;
+      }
+    } catch {}
+  }
+
+  // Not a custom model either: check synced/imported models (provider's own
+  // /models discovery). An operator-edited imported model with an "images"
+  // endpoint override must be routable even though it never entered customModels.
+  if (!provider) {
+    try {
+      const syncedMap = (await getAllSyncedAvailableModels()) as Record<
+        string,
+        Array<{ id?: string; supportedEndpoints?: string[] }>
+      >;
+      for (const [providerId, models] of Object.entries(syncedMap)) {
+        if (!Array.isArray(models)) continue;
+        for (const model of models) {
+          if (!model?.id || !Array.isArray(model.supportedEndpoints)) continue;
+          if (!model.supportedEndpoints.includes("images")) continue;
+          if (`${providerId}/${model.id}` === body.model) {
             provider = providerId;
             isCustomModel = true;
             break;

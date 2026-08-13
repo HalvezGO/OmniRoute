@@ -7,6 +7,7 @@
 import { getDbInstance } from "./core";
 import { backupDbFile } from "./backup";
 import { getProviderConnectionsCount } from "./providers";
+import { getModelSyncedOverrides, type ModelSyncedOverrideMap } from "./modelSyncedOverrides";
 import { type JsonRecord, asRecord, toNonEmptyString, getKeyValue } from "./models/shared";
 import {
   readCompatList,
@@ -439,7 +440,43 @@ export async function getSyncedAvailableModelsForConnection(
 }
 
 /**
+ * Merge operator overrides from model_synced_overrides onto a synced model row.
+ * Overrides win over whatever the /models sync last reported, and only the keys
+ * the operator actually edited are applied (the map is per-model, partial).
+ */
+function mergeSyncedOverrides(
+  model: SyncedAvailableModel,
+  overrideMap: ModelSyncedOverrideMap
+): SyncedAvailableModel {
+  const overrides = overrideMap.get(model.id);
+  if (!overrides) return model;
+
+  const merged: SyncedAvailableModel = { ...model };
+  if (typeof overrides.apiFormat === "string" && overrides.apiFormat) {
+    merged.apiFormat = overrides.apiFormat;
+  }
+  if (Array.isArray(overrides.supportedEndpoints)) {
+    merged.supportedEndpoints = Array.from(
+      new Set(
+        overrides.supportedEndpoints
+          .map((endpoint) => toNonEmptyString(endpoint))
+          .filter((endpoint): endpoint is string => Boolean(endpoint))
+      )
+    ).sort();
+  }
+  if (typeof overrides.supportsVision === "boolean") {
+    merged.supportsVision = overrides.supportsVision;
+  }
+  if (typeof overrides.targetFormat === "string" && overrides.targetFormat) {
+    merged.targetFormat = overrides.targetFormat;
+  }
+  return merged;
+}
+
+/**
  * Get all synced available models for a provider, unioned across all connections.
+ * Operator edits from model_synced_overrides are merged onto the synced rows so
+ * per-model api format / endpoints / vision overrides survive a re-sync.
  */
 export async function getSyncedAvailableModels(
   providerId: string
@@ -457,6 +494,12 @@ export async function getSyncedAvailableModels(
     const models = normalizeSyncedAvailableModels(JSON.parse(value));
     for (const m of models) {
       if (m.id) map.set(m.id, m);
+    }
+  }
+  const overrideMap = getModelSyncedOverrides(providerId);
+  if (overrideMap.size > 0) {
+    for (const [modelId, model] of map) {
+      map.set(modelId, mergeSyncedOverrides(model, overrideMap));
     }
   }
   return Array.from(map.values());
@@ -514,6 +557,12 @@ export async function getAllSyncedAvailableModels(): Promise<
   }
   const result: Record<string, SyncedAvailableModel[]> = {};
   for (const [providerId, map] of byProvider) {
+    const overrideMap = getModelSyncedOverrides(providerId);
+    if (overrideMap.size > 0) {
+      for (const [modelId, model] of map) {
+        map.set(modelId, mergeSyncedOverrides(model, overrideMap));
+      }
+    }
     result[providerId] = Array.from(map.values());
   }
   return result;
