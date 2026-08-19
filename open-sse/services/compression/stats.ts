@@ -15,6 +15,28 @@ import {
 import { anthropicImageTokens, ANTHROPIC_IMAGE_BLOCK_OVERHEAD_TOKENS } from "omniglyph";
 
 const CHARS_PER_TOKEN = 4;
+const CJK_CHARS_PER_TOKEN = 2.5;
+const CJK_RATIO_THRESHOLD = 0.3;
+const CJK_RE = /[\uAC00-\uD7A3\u1100-\u11FF\u3130-\u318F\u4E00-\u9FFF\u3400-\u4DBF\u3040-\u30FF]/;
+const ASCII_ONLY_RE = /^[\x00-\x7F]*$/;
+
+function isPureAscii(text: string): boolean {
+  return ASCII_ONLY_RE.test(text);
+}
+
+function charsPerTokenForText(text: string): number {
+  if (text.length === 0) return CHARS_PER_TOKEN;
+  if (isPureAscii(text)) return CHARS_PER_TOKEN;
+  const stride = text.length > 2048 ? Math.ceil(text.length / 2048) : 1;
+  let cjk = 0;
+  let sampled = 0;
+  for (let i = 0; i < text.length; i += stride) {
+    sampled++;
+    if (CJK_RE.test(text[i]!)) cjk++;
+  }
+  const ratio = sampled === 0 ? 0 : cjk / sampled;
+  return ratio > CJK_RATIO_THRESHOLD ? CJK_CHARS_PER_TOKEN : CHARS_PER_TOKEN;
+}
 
 /**
  * Anthropic image block shape this estimator recognizes:
@@ -67,11 +89,14 @@ function decodePngDimensions(base64: string): { width: number; height: number } 
   }
 }
 
-/** Char-count fallback for one value (same accounting as the legacy estimator). */
+/** Char-count fallback for one value (layered: ASCII fast → CJK medium → tiktoken slow). */
 function charTokensOf(value: unknown): number {
   if (value === null || value === undefined) return 0;
   const str = typeof value === "string" ? value : JSON.stringify(value);
-  return Math.ceil(str.length / CHARS_PER_TOKEN);
+  // FAST: pure ASCII → heuristic
+  if (isPureAscii(str)) return Math.ceil(str.length / CHARS_PER_TOKEN);
+  // MEDIUM: CJK text → CJK-aware heuristic
+  return Math.ceil(str.length / charsPerTokenForText(str));
 }
 
 /**
