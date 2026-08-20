@@ -199,6 +199,14 @@ export function filterUsageForFormat(usage, targetFormat) {
     ) {
       convertedUsage.total_tokens = convertedUsage.prompt_tokens + convertedUsage.completion_tokens;
     }
+    // Rebuild prompt_tokens_details.cached_tokens from flat cached_tokens / cache_read_input_tokens (#8171)
+    const flatCached = convertedUsage.cached_tokens ?? convertedUsage.cache_read_input_tokens;
+    if (flatCached !== undefined && !convertedUsage.prompt_tokens_details?.cached_tokens) {
+      convertedUsage.prompt_tokens_details = {
+        ...convertedUsage.prompt_tokens_details,
+        cached_tokens: flatCached,
+      };
+    }
   }
 
   // Helper to pick only defined fields from usage
@@ -217,6 +225,7 @@ export function filterUsageForFormat(usage, targetFormat) {
     [FORMATS.CLAUDE]: [
       "input_tokens",
       "output_tokens",
+      "output_tokens_details",
       "cache_read_input_tokens",
       "cache_creation_input_tokens",
       "estimated",
@@ -232,9 +241,13 @@ export function filterUsageForFormat(usage, targetFormat) {
     [FORMATS.OPENAI_RESPONSES]: [
       "input_tokens",
       "output_tokens",
+      "total_tokens",
       "input_tokens_details",
       "output_tokens_details",
       "estimated",
+      "cost_in_usd_ticks",
+      "server_side_tool_usage_details",
+      "server_side_tool_usage",
     ],
     // OpenAI format (default for OPENAI, CODEX, KIRO, etc.)
     default: [
@@ -245,6 +258,10 @@ export function filterUsageForFormat(usage, targetFormat) {
       "reasoning_tokens",
       "prompt_tokens_details",
       "completion_tokens_details",
+      "prompt_cache_hit_tokens",
+      "prompt_cache_miss_tokens",
+      "cache_read_input_tokens",
+      "cache_creation_input_tokens",
       "estimated",
     ],
   };
