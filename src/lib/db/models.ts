@@ -427,7 +427,10 @@ export async function getSyncedAvailableModelsForConnection(
   if (!value) return [];
   try {
     const models = JSON.parse(value);
-    return normalizeSyncedAvailableModels(models, providerId);
+    return applySyncedModelCompatOverrides(
+      providerId,
+      normalizeSyncedAvailableModels(models, providerId)
+    );
   } catch {
     return [];
   }
@@ -445,6 +448,48 @@ export async function getFreshAntigravityModelsForConnection(
     .get(connectionId) as { provider: string; syncedModelsAt: string | null } | undefined;
   if (!row || !isSyncedAtFresh(row.syncedModelsAt)) return [];
   return getSyncedAvailableModelsForConnection(row.provider, connectionId);
+}
+
+/**
+ * Overlay operator-owned compat fields on synced/imported rows.
+ *
+ * A synced model has no `customModels` row. Its apiFormat/targetFormat/
+ * supportsVision edits live in the `modelCompatOverrides` namespace so a
+ * re-sync cannot overwrite them, and so we never create a synthetic custom row
+ * that would shadow the discovered metadata. Endpoint and context-window
+ * overrides have their own stores and are intentionally not handled here.
+ */
+function applySyncedModelCompatOverrides(
+  providerId: string,
+  models: SyncedAvailableModel[],
+  overrides?: ModelCompatOverride[]
+): SyncedAvailableModel[] {
+  if (models.length === 0) return models;
+  const compatOverrides = overrides ?? readCompatList(providerId);
+  if (compatOverrides.length === 0) return models;
+  const byId = new Map(
+    compatOverrides
+      .filter(
+        (override) =>
+          override.apiFormat ||
+          override.targetFormat ||
+          typeof override.supportsVision === "boolean"
+      )
+      .map((override) => [override.id, override])
+  );
+  if (byId.size === 0) return models;
+  return models.map((model) => {
+    const override = byId.get(model.id);
+    if (!override) return model;
+    return {
+      ...model,
+      ...(override.apiFormat ? { apiFormat: override.apiFormat } : {}),
+      ...(override.targetFormat ? { targetFormat: override.targetFormat } : {}),
+      ...(typeof override.supportsVision === "boolean"
+        ? { supportsVision: override.supportsVision }
+        : {}),
+    };
+  });
 }
 
 export async function getSyncedAvailableModels(
@@ -465,7 +510,7 @@ export async function getSyncedAvailableModels(
       if (m.id) map.set(m.id, m);
     }
   }
-  return Array.from(map.values());
+  return applySyncedModelCompatOverrides(providerId, Array.from(map.values()));
 }
 
 /** OpenCode and OpenCode Zen synced ids. Excludes opencode-go (`opencode%` would match it). */
@@ -511,12 +556,17 @@ export async function getSyncedAvailableModelsByConnection(
     )
     .all(`${prefix}%`);
   const result: SyncedAvailableModelsByConnection = {};
+  const overrides = readCompatList(providerId);
   for (const row of rows) {
     const { key, value } = getKeyValue(row);
     if (!key || value === null || !key.startsWith(prefix)) continue;
     try {
       const connectionId = key.slice(prefix.length);
-      result[connectionId] = normalizeSyncedAvailableModels(JSON.parse(value), providerId);
+      result[connectionId] = applySyncedModelCompatOverrides(
+        providerId,
+        normalizeSyncedAvailableModels(JSON.parse(value), providerId),
+        overrides
+      );
     } catch {
       Object.defineProperty(result, SYNCED_AVAILABLE_MODELS_MALFORMED, {
         value: true,
@@ -549,7 +599,7 @@ export async function getAllSyncedAvailableModels(): Promise<
   }
   const result: Record<string, SyncedAvailableModel[]> = {};
   for (const [providerId, map] of byProvider) {
-    result[providerId] = Array.from(map.values());
+    result[providerId] = applySyncedModelCompatOverrides(providerId, Array.from(map.values()));
   }
   return result;
 }

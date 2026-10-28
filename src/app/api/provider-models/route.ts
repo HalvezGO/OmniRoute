@@ -13,6 +13,7 @@ import {
   updateCustomModel,
   getModelCompatOverrides,
   mergeModelCompatOverride,
+  getSyncedAvailableModels,
   resetModelEndpointOverride,
   getHiddenModelsByProvider,
   type ModelCompatPatch,
@@ -190,7 +191,7 @@ export async function POST(request) {
       source || "manual",
       apiFormat,
       supportedEndpoints,
-      targetFormat,
+      targetFormat ?? undefined,
       {
         ...(maxInputTokens != null ? { inputTokenLimit: maxInputTokens } : {}),
         ...(maxOutputTokens != null ? { outputTokenLimit: maxOutputTokens } : {}),
@@ -289,6 +290,69 @@ export async function PUT(request) {
       } else {
         setModelContextOverride(provider, modelId, contextWindowOverride, "manual");
         contextWindowOverrideResult = contextWindowOverride;
+      }
+    }
+
+    // A synced/imported model has no customModels row. Persist compat-only edits
+    // in `modelCompatOverrides` instead of letting updateCustomModel synthesize a
+    // custom row whose default name/apiFormat/endpoints would overwrite the
+    // discovered metadata on the next catalog merge. `supportedEndpoints` and
+    // `contextWindowOverride` have dedicated stores and are intentionally
+    // excluded from this branch.
+    const syncedCompatKeys = new Set([
+      "provider",
+      "modelId",
+      "apiFormat",
+      "targetFormat",
+      "supportsVision",
+      "contextWindowOverride",
+    ]);
+    const requestKeys = Object.keys(raw);
+    const hasSyncedCompatField =
+      requestKeys.includes("apiFormat") ||
+      requestKeys.includes("targetFormat") ||
+      requestKeys.includes("supportsVision");
+    if (hasSyncedCompatField && requestKeys.every((key) => syncedCompatKeys.has(key))) {
+      const customModels = (await getCustomModels(provider)) as Array<{
+        id?: string;
+        source?: string;
+      }>;
+      // `endpoint-override` rows are virtual endpoint overlays, not real custom
+      // models. Treat them like a synced row so compat edits still reach the
+      // compat store (the overlay merge only applies supportedEndpoints).
+      const hasCustomRow =
+        Array.isArray(customModels) &&
+        customModels.some(
+          (model) => model?.id === modelId && model?.source !== "endpoint-override"
+        );
+      if (!hasCustomRow) {
+        const syncedModels = await getSyncedAvailableModels(provider);
+        if (syncedModels.some((model) => model.id === modelId)) {
+          const patch: ModelCompatPatch = {};
+          if ("apiFormat" in raw) {
+            patch.apiFormat = typeof apiFormat === "string" ? apiFormat : null;
+          }
+          if ("targetFormat" in raw) {
+            patch.targetFormat = typeof targetFormat === "string" ? targetFormat : null;
+          }
+          if ("supportsVision" in raw) {
+            patch.supportsVision =
+              supportsVision === null || typeof supportsVision === "boolean"
+                ? supportsVision
+                : undefined;
+          }
+          if (Object.keys(patch).length > 0) {
+            mergeModelCompatOverride(provider, modelId, patch);
+          }
+          return Response.json({
+            ok: true,
+            syncedOverride: true,
+            modelCompatOverrides: getModelCompatOverrides(provider),
+            ...(contextWindowOverrideResult !== undefined
+              ? { contextWindowOverride: contextWindowOverrideResult }
+              : {}),
+          });
+        }
       }
     }
 
