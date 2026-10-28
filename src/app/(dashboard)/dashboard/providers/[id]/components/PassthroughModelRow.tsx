@@ -10,11 +10,44 @@
  */
 import React, { useState, useRef, useEffect } from "react";
 import { Badge, CapabilityBadge } from "@/shared/components";
-import { parseContextWindowOverrideInput, providerText } from "../providerPageHelpers";
+import {
+  parseContextWindowOverrideInput,
+  providerText,
+  type CompatModelRow,
+  type ModelPropertiesPatch,
+} from "../providerPageHelpers";
 import ModelCompatPopover from "./ModelCompatPopover";
 import ModelEndpointTagsEditor, { type ModelEndpointEditorInfo } from "./ModelEndpointTagsEditor";
 import ModelOutputTokenEditor from "./ModelOutputTokenEditor";
 import { ModelSourceBadge, type ModelCompatSavePatch } from "./ModelRow";
+
+const API_FORMAT_OPTIONS = [
+  "chat-completions",
+  "responses",
+  "embeddings",
+  "rerank",
+  "audio-transcriptions",
+  "audio-speech",
+  "images-generations",
+  "video",
+] as const;
+
+const TARGET_FORMAT_OPTIONS = [
+  { value: "", labelKey: "targetFormatAuto", fallback: "Auto" },
+  { value: "openai", labelKey: "compatProtocolOpenAI", fallback: "OpenAI" },
+  {
+    value: "openai-responses",
+    labelKey: "compatProtocolOpenAIResponses",
+    fallback: "OpenAI Responses",
+  },
+  { value: "claude", labelKey: "compatProtocolClaude", fallback: "Claude" },
+  { value: "gemini", labelKey: "targetFormatGemini", fallback: "Gemini" },
+  {
+    value: "antigravity",
+    labelKey: "targetFormatAntigravity",
+    fallback: "Antigravity",
+  },
+] as const;
 
 // ---------------------------------------------------------------------------
 // Props
@@ -60,6 +93,10 @@ export interface PassthroughModelRowProps {
   onSaveContextWindowOverride?: (modelId: string, value: number | null) => Promise<void>;
   savingContextOverride?: boolean;
   endpointInfo?: ModelEndpointEditorInfo;
+  /** Raw synced/custom row, used to seed the compat-only property editor. */
+  model?: CompatModelRow;
+  onSaveModelProperties?: (patch: ModelPropertiesPatch) => Promise<void>;
+  savingModelProperties?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +136,9 @@ export default function PassthroughModelRow({
   onSaveContextWindowOverride,
   savingContextOverride,
   endpointInfo,
+  model,
+  onSaveModelProperties,
+  savingModelProperties,
 }: PassthroughModelRowProps) {
   const [editing, setEditing] = useState(false);
   const [aliasValue, setAliasValue] = useState(alias || "");
@@ -106,6 +146,17 @@ export default function PassthroughModelRow({
   const [editingContext, setEditingContext] = useState(false);
   const [contextValue, setContextValue] = useState("");
   const contextInputRef = useRef<HTMLInputElement>(null);
+  const [editingProperties, setEditingProperties] = useState(false);
+  const [propertyApiFormat, setPropertyApiFormat] = useState(
+    model?.apiFormat || "chat-completions"
+  );
+  const [propertyTargetFormat, setPropertyTargetFormat] = useState(model?.targetFormat || "");
+  const [propertyVision, setPropertyVision] = useState<"auto" | "true" | "false">(
+    typeof model?.supportsVision === "boolean" ? (model.supportsVision ? "true" : "false") : "auto"
+  );
+  const canEditProperties =
+    Boolean(onSaveModelProperties && model) &&
+    (source === "imported" || source === "custom" || source === "manual");
 
   // Only useful when it actually differs from the id — otherwise we would just print
   // the opaque id twice.
@@ -157,6 +208,29 @@ export default function PassthroughModelRow({
     if (e.key === "Escape") {
       setEditingContext(false);
     }
+  };
+
+  const beginPropertyEdit = () => {
+    setPropertyApiFormat(model?.apiFormat || "chat-completions");
+    setPropertyTargetFormat(model?.targetFormat || "");
+    setPropertyVision(
+      typeof model?.supportsVision === "boolean"
+        ? model.supportsVision
+          ? "true"
+          : "false"
+        : "auto"
+    );
+    setEditingProperties(true);
+  };
+
+  const submitPropertyEdit = async () => {
+    if (!onSaveModelProperties) return;
+    await onSaveModelProperties({
+      apiFormat: propertyApiFormat,
+      targetFormat: propertyTargetFormat || null,
+      supportsVision: propertyVision === "auto" ? null : propertyVision === "true",
+    });
+    setEditingProperties(false);
   };
 
   const handleAliasSubmit = () => {
@@ -323,6 +397,16 @@ export default function PassthroughModelRow({
               <span>{providerText(t, "blacklistModel", "Blacklist")}</span>
             </button>
           )}
+          {canEditProperties && !editingProperties && (
+            <button
+              onClick={beginPropertyEdit}
+              className="rounded p-0.5 text-text-muted hover:bg-sidebar hover:text-primary"
+              title={providerText(t, "edit", "Edit")}
+              aria-label={providerText(t, "edit", "Edit")}
+            >
+              <span className="material-symbols-outlined text-sm">tune</span>
+            </button>
+          )}
           {/* #14337: the affordance itself. Rendered only when the section
               supplies a handler, so rows that cannot take an override are
               unchanged. */}
@@ -418,6 +502,71 @@ export default function PassthroughModelRow({
           )}
         </div>
       </div>
+      {editingProperties && (
+        <div className="flex flex-wrap items-end gap-2 rounded-md border border-border bg-sidebar/40 p-2">
+          <label className="flex flex-col gap-1 text-[10px] text-text-muted">
+            <span>{providerText(t, "apiFormatLabel", "API format")}</span>
+            <select
+              value={propertyApiFormat}
+              onChange={(e) => setPropertyApiFormat(e.target.value)}
+              disabled={savingModelProperties}
+              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-text-main"
+            >
+              {API_FORMAT_OPTIONS.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] text-text-muted">
+            <span>{providerText(t, "targetFormatLabel", "Target format")}</span>
+            <select
+              value={propertyTargetFormat}
+              onChange={(e) => setPropertyTargetFormat(e.target.value)}
+              disabled={savingModelProperties}
+              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-text-main"
+            >
+              {TARGET_FORMAT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {providerText(t, option.labelKey, option.fallback)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 text-[10px] text-text-muted">
+            <span>{providerText(t, "visionCapableLabel", "Vision")}</span>
+            <select
+              value={propertyVision}
+              onChange={(e) => setPropertyVision(e.target.value as "auto" | "true" | "false")}
+              disabled={savingModelProperties}
+              className="rounded border border-border bg-background px-1.5 py-0.5 text-[11px] text-text-main"
+            >
+              <option value="auto">{providerText(t, "targetFormatAuto", "Default (auto)")}</option>
+              <option value="true">Yes</option>
+              <option value="false">No</option>
+            </select>
+          </label>
+          <div className="ml-auto flex items-center gap-1">
+            <button
+              onClick={() => void submitPropertyEdit()}
+              disabled={savingModelProperties}
+              className="rounded p-0.5 text-text-muted hover:bg-sidebar hover:text-primary disabled:opacity-40"
+              title={providerText(t, "save", "Save")}
+            >
+              <span className="material-symbols-outlined text-sm">check</span>
+            </button>
+            <button
+              onClick={() => setEditingProperties(false)}
+              disabled={savingModelProperties}
+              className="rounded p-0.5 text-text-muted hover:bg-sidebar hover:text-primary disabled:opacity-40"
+              title={providerText(t, "cancel", "Cancel")}
+            >
+              <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

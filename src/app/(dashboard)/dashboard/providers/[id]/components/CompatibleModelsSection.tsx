@@ -27,6 +27,7 @@ import { ModelVisibilityToolbar } from "./ModelRow";
 import { sortModelsFreeFirst, isModelFreeBadge } from "@/shared/utils/freeModels";
 import { useStrictFreeBadge } from "./useStrictFreeBadge";
 import { useModelOutputOverrides } from "../hooks/useModelOutputOverrides";
+import { useModelPropertiesEditor } from "../hooks/useModelPropertiesEditor";
 import PassthroughModelRow, { type PassthroughModelRowProps } from "./PassthroughModelRow";
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,7 @@ export default function CompatibleModelsSection({
 
   const notify = useNotificationStore();
   const outputOverrides = useModelOutputOverrides(providerStorageAlias, t);
+  const modelProperties = useModelPropertiesEditor(providerStorageAlias, onModelsChanged, t);
 
   // #14337: context-window overrides for rows that have no customModels entry.
   // GET /api/provider-models returns them per provider; without this the value a
@@ -256,6 +258,7 @@ export default function CompatibleModelsSection({
       isFree: boolean;
       isHidden: boolean;
       supportsVision?: boolean;
+      model?: CompatModelRow;
     }> = [];
     const seenModelIds = new Set<string>();
 
@@ -285,6 +288,7 @@ export default function CompatibleModelsSection({
         ),
         isHidden: isModelHidden(model.id),
         supportsVision: model.supportsVision,
+        model,
       });
       seenModelIds.add(model.id);
     };
@@ -328,6 +332,7 @@ export default function CompatibleModelsSection({
         ),
         isHidden: isModelHidden(modelId),
         supportsVision: customModel?.supportsVision,
+        model: customModel,
       });
       seenModelIds.add(modelId);
     }
@@ -558,7 +563,16 @@ export default function CompatibleModelsSection({
           />
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {displayModels.map(
-              ({ modelId, alias, displayName, isHidden, source, isFree, supportsVision }) => {
+              ({
+                modelId,
+                alias,
+                displayName,
+                isHidden,
+                source,
+                isFree,
+                supportsVision,
+                model,
+              }) => {
                 const fullModel = `${providerDisplayAlias}/${modelId}`;
                 return (
                   <PassthroughModelRow
@@ -621,6 +635,11 @@ export default function CompatibleModelsSection({
                     contextWindowOverride={contextOverrides[modelId] ?? null}
                     onSaveContextWindowOverride={saveContextWindowOverride}
                     savingContextOverride={savingContextModelId === modelId}
+                    model={model}
+                    onSaveModelProperties={(patch) =>
+                      modelProperties.saveModelProperties(modelId, patch)
+                    }
+                    savingModelProperties={modelProperties.savingModelProperties === modelId}
                   />
                 );
               }

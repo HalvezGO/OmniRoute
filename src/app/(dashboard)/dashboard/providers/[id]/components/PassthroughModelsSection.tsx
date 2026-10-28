@@ -35,6 +35,7 @@ import {
 import { ModelVisibilityToolbar } from "./ModelRow";
 import { sortModelsFreeFirst, isModelFreeBadge } from "@/shared/utils/freeModels";
 import { useStrictFreeBadge } from "./useStrictFreeBadge";
+import { useModelPropertiesEditor } from "../hooks/useModelPropertiesEditor";
 import PassthroughModelRow from "./PassthroughModelRow";
 
 // ---------------------------------------------------------------------------
@@ -147,6 +148,7 @@ export default function PassthroughModelsSection({
   const [sortFreeFirst, setSortFreeFirst] = useState(false);
   const notify = useNotificationStore();
   const strictFreeBadge = useStrictFreeBadge();
+  const modelProperties = useModelPropertiesEditor(providerId, onModelsChanged, t);
   const customModelMap = useMemo(() => buildCompatMap(customModels), [customModels]);
 
   const handleTestAll = async () => {
@@ -241,6 +243,7 @@ export default function PassthroughModelsSection({
       source: string;
       isFree: boolean;
       isHidden: boolean;
+      model?: CompatModelRow;
     }> = [];
     const seenModelIds = new Set<string>();
 
@@ -274,6 +277,7 @@ export default function PassthroughModelsSection({
           { strict: strictFreeBadge }
         ),
         isHidden: isModelHidden(model.id),
+        model,
       });
       seenModelIds.add(model.id);
     };
@@ -317,6 +321,7 @@ export default function PassthroughModelsSection({
           { strict: strictFreeBadge }
         ),
         isHidden: isModelHidden(modelId),
+        model: customModel,
       });
       seenModelIds.add(modelId);
     }
@@ -449,7 +454,7 @@ export default function PassthroughModelsSection({
             onSortFreeFirstChange={setSortFreeFirst}
           />
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {displayModels.map(({ modelId, fullModel, alias, isHidden, source, isFree }) => (
+            {displayModels.map(({ modelId, fullModel, alias, isHidden, source, isFree, model }) => (
               <PassthroughModelRow
                 key={fullModel as string}
                 modelId={modelId}
@@ -496,6 +501,12 @@ export default function PassthroughModelsSection({
                 onTestModel={onTestModel}
                 testStatus={modelTestStatus?.[modelId] || null}
                 testingModel={testingModelId === modelId}
+                supportsVision={model?.supportsVision}
+                model={model}
+                onSaveModelProperties={(patch) =>
+                  modelProperties.saveModelProperties(modelId, patch)
+                }
+                savingModelProperties={modelProperties.savingModelProperties === modelId}
               />
             ))}
           </div>

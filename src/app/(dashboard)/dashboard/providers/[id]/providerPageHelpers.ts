@@ -101,6 +101,14 @@ export type CompatModelRow = {
 };
 
 export type CompatModelMap = Map<string, CompatModelRow>;
+
+/** Compat-only fields an operator can edit on a synced/imported model row. */
+export interface ModelPropertiesPatch {
+  apiFormat?: string;
+  targetFormat?: string | null;
+  supportsVision?: boolean | null;
+}
+
 export type HeaderDraftRow = { id: string; name: string; value: string };
 
 // ---------------------------------------------------------------------------
