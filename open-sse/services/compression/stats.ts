@@ -24,8 +24,8 @@ import {
   jsonLengthStrippingBase64DataUris,
   rawLengthStrippingBase64DataUris,
 } from "../../utils/jsonSize.ts";
+import { charsPerTokenForText, charsPerTokenForValue } from "../../utils/tokenEstimation.ts";
 
-const CHARS_PER_TOKEN = 4;
 const DEFAULT_IMAGE_TOKEN_ESTIMATE = 1200;
 
 /**
@@ -126,9 +126,9 @@ function decodePngDimensions(base64: string): { width: number; height: number } 
 function charTokensOf(value: unknown): number {
   if (value === null || value === undefined) return 0;
   if (typeof value === "string") {
-    return Math.ceil(rawLengthStrippingBase64DataUris(value) / CHARS_PER_TOKEN);
+    return Math.ceil(rawLengthStrippingBase64DataUris(value) / charsPerTokenForText(value));
   }
-  return Math.ceil(jsonLengthStrippingBase64DataUris(value) / CHARS_PER_TOKEN);
+  return Math.ceil(jsonLengthStrippingBase64DataUris(value) / charsPerTokenForValue(value));
 }
 
 /**

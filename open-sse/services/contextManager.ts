@@ -12,6 +12,7 @@ import {
 } from "../../src/lib/modelCapabilities.ts";
 import { parseModel } from "./model.ts";
 import { encodedStringLength, jsonLength } from "../utils/jsonSize.ts";
+import { charsPerTokenForText, charsPerTokenForValue } from "../utils/tokenEstimation.ts";
 
 // Default token limits per provider (fallbacks when not in registry)
 const DEFAULT_LIMITS: Record<string, number> = {
@@ -409,10 +410,10 @@ function measureVirtual(node: unknown, seen: Set<object>, flags?: MeasureFlags):
 export function estimateTokens(text: unknown): number {
   if (!text) return 0;
   if (typeof text === "string") {
-    return Math.ceil(text.length / CHARS_PER_TOKEN);
+    return Math.ceil(text.length / charsPerTokenForText(text));
   }
   const { chars, mediaTokens } = measureVirtual(text, new Set());
-  return Math.ceil(chars / CHARS_PER_TOKEN) + mediaTokens;
+  return Math.ceil(chars / charsPerTokenForValue(text)) + mediaTokens;
 }
 
 /**
