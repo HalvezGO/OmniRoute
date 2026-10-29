@@ -482,9 +482,14 @@ jobs:
       - name: Guard against stale digests
         run: |
           set -euo pipefail
-          # One digest per arch (amd64 + arm64) at most; more means stale digests leaked in (#15184).
+          # One amd64 digest per directory at most; more means stale digests leaked
+          # in (#15184). The bun directories may be absent when the optional bun
+          # image fails to build — treat that as zero, not as a find error.
           for dir in base web bun-base bun-web; do
-            count=$(find "/tmp/digests/$dir" -type f 2>/dev/null | wc -l)
+            count=0
+            if [ -d "/tmp/digests/$dir" ]; then
+              count=$(find "/tmp/digests/$dir" -type f | wc -l)
+            fi
             if [ "$count" -gt 2 ]; then
               echo "digests in $dir: found $count, expected at most 2 (stale digests leaked in)" >&2
               exit 1
@@ -500,7 +505,7 @@ jobs:
             local refs=()
             while IFS= read -r digest_file; do
               refs+=("${image}@sha256:$(basename "$digest_file")")
-            done < <(find "$dir" -type f | sort)
+            done < <(find "$dir" -type f 2>/dev/null | sort)
             if [ "${#refs[@]}" -eq 0 ]; then
               if [ -n "$optional" ]; then
                 echo "::warning::No image digests in $dir — skipping optional tag ${image}:${VERSION}${suffix}" >&2
