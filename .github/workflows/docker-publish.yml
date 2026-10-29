@@ -217,10 +217,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # Docker Hub fork build is amd64-only; the arm64 leg doubled the
+          # runner cost and is not part of the deployment target.
           - platform: linux/amd64
             arch: amd64
-          - platform: linux/arm64
-            arch: arm64
     env:
       IMAGE_NAME: caterpillarnextdoor/omniroute
     steps:
