@@ -418,8 +418,16 @@ jobs:
     needs:
       - prepare
       - build
+    # `always()` is required here: GitHub implicitly skips a dependent job when
+    # any job in its needs graph was skipped (runner-preflight is skipped when
+    # the VPS runner is off). The explicit result checks below still fail closed
+    # unless prepare and every build leg succeeded.
     if: >-
-      github.event_name != 'schedule' && needs.prepare.outputs.skip != 'true' &&
+      always() &&
+      github.event_name != 'schedule' &&
+      needs.prepare.result == 'success' &&
+      needs.prepare.outputs.skip != 'true' &&
+      needs.build.result == 'success' &&
       (github.event_name != 'schedule' || github.repository == 'diegosouzapw/OmniRoute')
     runs-on: ubuntu-latest
     permissions:
