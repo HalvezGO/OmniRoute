@@ -112,6 +112,35 @@ jobs:
           OMNIROUTE_USE_TURBOPACK: "0"
         run: npm run build
 
+      - name: Prune escaping standalone symlinks
+        # npm 11 can leave .bin links pointing at the checkout's node_modules
+        # outside the standalone tree. The byte-verified bundle packer rejects
+        # those targets, and a link that escapes the deployable tree would not
+        # resolve after packaging anyway.
+        shell: bash
+        run: |
+          node --input-type=module - <<'NODE'
+          import fs from "node:fs";
+          import path from "node:path";
+          const root = path.resolve(".build/next/standalone");
+          const walk = (dir) => {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+              const abs = path.join(dir, entry.name);
+              if (entry.isSymbolicLink()) {
+                const target = path.resolve(path.dirname(abs), fs.readlinkSync(abs));
+                const rel = path.relative(root, target);
+                if (rel.startsWith("..") || path.isAbsolute(rel)) {
+                  fs.unlinkSync(abs);
+                  console.log(`[standalone] pruned escaping symlink ${path.relative(root, abs)}`);
+                }
+              } else if (entry.isDirectory()) {
+                walk(abs);
+              }
+            }
+          };
+          walk(root);
+          NODE
+
       - name: Pack standalone bundle
         # Deterministic tar.gz + byte-level manifest; the manifest embeds the
         # archive's own sha256 so artifact-transfer corruption is caught before
