@@ -96,6 +96,13 @@ jobs:
           ONNXRUNTIME_NODE_INSTALL: "skip"
           NPM_CONFIG_LEGACY_PEER_DEPS: true
 
+      # npm 11 can skip optional-dependency install scripts, leaving the native
+      # better-sqlite3 binary absent even though package.json allowScripts opts
+      # it in. Install it explicitly so the standalone build's native-deps gate
+      # is deterministic on hosted runners.
+      - name: Ensure better-sqlite3 native dependency
+        run: npm install better-sqlite3@13.0.3 --no-save --foreground-scripts --legacy-peer-deps
+
       - name: Build Next.js standalone
         # webpack, not Turbopack, for the same hosted-runner RAM reason as the
         # linux leg (see the long comment on the fallback step in `build`).
@@ -182,6 +189,9 @@ jobs:
         env:
           ONNXRUNTIME_NODE_INSTALL: "skip"
           NPM_CONFIG_LEGACY_PEER_DEPS: true
+
+      - name: Ensure better-sqlite3 native dependency
+        run: npm install better-sqlite3@13.0.3 --no-save --foreground-scripts --legacy-peer-deps
 
       # The Linux leg produces x64 + arm64 installers from one x64 runner. npm
       # deliberately installs only host-compatible optional dependencies, so
